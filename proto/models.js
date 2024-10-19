@@ -2,20 +2,6 @@
 const mongoose = require('mongoose');
 const { Schema } = mongoose;
 
-// USER 스키마
-const userSchema = new Schema({
-	UId: { type: String, required: true, unique: true },
-	Token: { type: String, required: true },
-	chats: [chatSchema]
-});
-
-// CHAT 스키마
-const chatSchema = new Schema({
-	CId: { type: String, required: true, unique: true },
-	Cdate: { type: Date, default: Date.now },
-	question: [questionSchema]
-});
-
 // QUESTION 스키마
 const questionSchema = new Schema({
 	QId: { type: String, required: true, unique: true },
@@ -23,6 +9,22 @@ const questionSchema = new Schema({
 	Answer: { type: String, required: true },
 	Qdate: { type: Date, default: Date.now }
 });
+
+// CHAT 스키마
+const chatSchema = new Schema({
+	CId: { type: String, required: true, unique: true },
+	Cname: { type: String },
+	Cdate: { type: Date, default: Date.now },
+	Questions: [{ type: Schema.Types.ObjectId, ref: 'Question' }]
+});
+
+// USER 스키마
+const userSchema = new Schema({
+	UId: { type: String, required: true, unique: true },
+	Token: { type: String, required: true },
+	Chats: [{ type: Schema.Types.ObjectId, ref: 'Chat' }]
+});
+
 
 // 각 스키마에 대한 모델 생성
 const User = mongoose.model('User', userSchema);
