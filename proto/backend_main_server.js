@@ -9,15 +9,19 @@ const app = express();
 app.use(express.json()); // JSON 파싱	
 
 // MongoDB 연결
-const dbURI = 'mongodb://localhost:27017/chatbotDB'; // 로컬 MongoDB URL (필요에 따라 수정)
-mongoose.connect(dbURI, { useNewUrlParser: true, useUnifiedTopology: true })
+const dbURI = 'mongodb://localhost:27017/chatDB'; // 로컬 MongoDB URL (필요에 따라 수정)
+mongoose.connect(dbURI)
 	.then(() => console.log('success : DB connection'))
 	.catch((err) => console.log('fail : DB connection', err));
 
-// 사용자 생성 API 예시
-app.post('/users', async (req, res) => {
+// 사용자 생성 임시 api
+app.post('/api/user/add', async (req, res) => {
 	try {
-		const newUser = new User(req.body);
+		const newUser = new User({
+			"UId": "1111",
+			"Token": "22222",
+			"Chats": []
+		});
 		const savedUser = await newUser.save();
 		res.status(201).json(savedUser);
 	} catch (error) {
@@ -70,7 +74,7 @@ app.post('api/history/make', async (req, res) => {
 		});
 
 		await newChat.save();
-		user.chats.push(newChat._id);
+		user.Chats.push(newChat._id);
 		await user.save();
 
 		res.status(201).json(newChat);
@@ -83,7 +87,7 @@ app.post('api/history/make', async (req, res) => {
 
 //히스토리 이름 수정하기
 // after : 수정할 히스토리 이름.
-// body에는 수정할 히스토리, 유저의 id가 필요함.
+// body에는 수정할 히스토리의 id, 유저의 id가 필요함.
 app.patch('/api/history/name/:after', async (req, res) => {
 	const { user_id, chat_id } = req.body;
 	const { after } = req.params;

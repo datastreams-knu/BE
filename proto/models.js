@@ -4,7 +4,6 @@ const { Schema } = mongoose;
 
 // QUESTION 스키마
 const questionSchema = new Schema({
-	QId: { type: String, required: true, unique: true },
 	Question: { type: String, required: true },
 	Answer: { type: String, required: true },
 	Qdate: { type: Date, default: Date.now }
@@ -12,7 +11,6 @@ const questionSchema = new Schema({
 
 // CHAT 스키마
 const chatSchema = new Schema({
-	CId: { type: String, required: true, unique: true },
 	Cname: { type: String },
 	Cdate: { type: Date, default: Date.now },
 	Questions: [{ type: Schema.Types.ObjectId, ref: 'Question' }]
@@ -20,7 +18,6 @@ const chatSchema = new Schema({
 
 // USER 스키마
 const userSchema = new Schema({
-	UId: { type: String, required: true, unique: true },
 	Token: { type: String, required: true },
 	Chats: [{ type: Schema.Types.ObjectId, ref: 'Chat' }]
 });
