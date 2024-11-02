@@ -32,6 +32,15 @@ app.post('/api/user/add', async (req, res) => {
 	}
 });
 
+//frontend - backend test api
+app.get('/api/test', (req, res) => {
+	res.json({
+		success: true,
+		message: 'Backend communication successful!',
+		timestamp: new Date().toISOString(),
+	});
+});
+
 /*************
 채팅 api
 *************/
