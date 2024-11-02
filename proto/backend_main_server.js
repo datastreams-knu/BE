@@ -1,12 +1,15 @@
 //dependecies
 const express = require('express');
 const mongoose = require('mongoose');
+const cors = require('cors');
+const PORT = 3001;
 
 const { User, Chat, Question } = require('./models'); // 모델 불러오기
 
 //express 객체 생성.
 const app = express();
 app.use(express.json()); // JSON 파싱	
+app.use(cors()); // 모든 도메인에서 접근 허용
 
 // MongoDB 연결
 const dbURI = 'mongodb://localhost:27017/chatDB'; // 로컬 MongoDB URL (필요에 따라 수정)
@@ -164,7 +167,6 @@ app.delete('/api/history/date/:name', (req, res) => {
 
 
 // 서버 실행
-const PORT = process.env.PORT || 3000;
-app.listen(PORT, () => {
+app.listen(PORT, '0.0.0.0', () => {
 	console.log(`서버가 포트 ${PORT}에서 실행 중입니다.`);
 });
