@@ -34,6 +34,7 @@ app.post('/api/user/add', async (req, res) => {
 
 //frontend - backend test api
 app.get('/api/test', (req, res) => {
+	console.log('GET /api/test 요청 수신');
 	res.json({
 		success: true,
 		message: 'Backend communication successful!',
