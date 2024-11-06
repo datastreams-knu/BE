@@ -1,4 +1,4 @@
-//dependecies
+//dependencies
 const express = require('express');
 const mongoose = require('mongoose');
 const cors = require('cors');
@@ -47,43 +47,91 @@ app.get('/api/test', (req, res) => {
 *************/
 //질문 보내기
 app.post('/api/question', async (req, res) => {
-	//db에 질문 저장
+	try {
+		const { userId, questionText } = req.body;
+		const user = await User.findOne({ UId: userId });
+		if (!user) return res.status(404).json({ message: 'User not found.' });
+
+		const newQuestion = new Question({
+			QText: questionText,
+			QDate: new Date(),
+		});
+		await newQuestion.save();
+
+		user.Questions.push(newQuestion._id);
+		await user.save();
+
+		res.status(201).json(newQuestion);
+	} catch (error) {
+		res.status(500).json({ error: error.message });
+	}
 });
+
 //답변 받기
 app.get('/api/chat/answer', async (req, res) => {
-	//db에 있는 질문 꺼내오기 -> 인자는 뭐로??
-	//질문 ai서버에 보낸 후 return
+	try {
+		const { questionId } = req.query;
+		const question = await Question.findById(questionId);
+		if (!question) return res.status(404).json({ message: 'Question not found.' });
+
+		// AI 서버 통신 로직 필요 (예: AI 서버 API 호출 및 응답 수신)
+		const aiResponse = "This is a placeholder for the AI response.";
+
+		question.answer = aiResponse;
+		await question.save();
+
+		res.status(200).json({ answer: aiResponse });
+	} catch (error) {
+		res.status(500).json({ error: error.message });
+	}
 });
+
 //질문 보낸 시간 받기
 app.get('/api/chat/date', async (req, res) => {
-	//db에 있는 질문들 어떻게 구분???
+	try {
+		const { questionId } = req.query;
+		const question = await Question.findById(questionId);
+		if (!question) return res.status(404).json({ message: 'Question not found.' });
+
+		res.status(200).json({ date: question.QDate });
+	} catch (error) {
+		res.status(500).json({ error: error.message });
+	}
 });
+
 //답변 평가하기
 app.post('/api/chat/reputate/:reputation', async (req, res) => {
+	try {
+		const { questionId } = req.body;
+		const { reputation } = req.params;
+		const question = await Question.findById(questionId);
+		if (!question) return res.status(404).json({ message: 'Question not found.' });
 
+		question.reputation = reputation;
+		await question.save();
+
+		res.status(200).json({ message: 'Reputation updated successfully.' });
+	} catch (error) {
+		res.status(500).json({ error: error.message });
+	}
 });
 
 /*************
 히스토리 api
 *************/
 //새 히스토리 만들기
-app.post('api/history/make', async (req, res) => {
-	//처음 이름은 어떻게 하지? 새로운 ChatID는 어떻게 정의????
-	// 프론트앤드에서 CId는 어떻게 저장하지?
+app.post('/api/history/make', async (req, res) => {
 	const { userId } = req.body;
 
 	try {
 		const user = await User.findOne({ UId: userId });
-		if (!user) {
-			return res.status(404).json({ message: 'User not found.' });
-		}
+		if (!user) return res.status(404).json({ message: 'User not found.' });
 
-		// 새로운 Chat 객체 생성
 		const newChat = new Chat({
-			CId: CId,
+			CId: mongoose.Types.ObjectId(),
 			Cname: 'initial name',
 			Cdate: Date.now(),
-			Question: []
+			Questions: []
 		});
 
 		await newChat.save();
@@ -95,54 +143,42 @@ app.post('api/history/make', async (req, res) => {
 		console.error(err);
 		res.status(500).json({ message: 'Internal backend server error.' });
 	}
-
 });
 
 //히스토리 이름 수정하기
-// after : 수정할 히스토리 이름.
-// body에는 수정할 히스토리의 id, 유저의 id가 필요함.
 app.patch('/api/history/name/:after', async (req, res) => {
 	const { user_id, chat_id } = req.body;
 	const { after } = req.params;
 
 	try {
 		const user = await User.findOne({ UId: user_id });
-		if (!user)
-			return res.status(404).json({ message: 'User not found.' });
+		if (!user) return res.status(404).json({ message: 'User not found.' });
+
 		const chat = await Chat.findOne({ CId: chat_id });
+		if (!chat) return res.status(404).json({ message: 'Chat not found.' });
 
-		if (!chat)
-			return res.status(404).json({ message: 'Chat not found.' });
-
-		// db접근 후 히스토리 이름 변경 및 저장.
 		chat.Cname = after;
 		await chat.save();
 
-		//성공 시 응답.
-		res.json({ message: 'name has been changed successly.' });
+		res.json({ message: 'Name changed successfully.' });
 	} catch (err) {
 		console.error(err);
 		res.status(500).json({ message: 'Internal backend server error.' });
-
 	}
-
 });
 
 //히스토리 내의 모든 채팅받기
 app.get('/api/history/all', async (req, res) => {
-	const { user_id, chat_id } = req.body;
+	const { user_id, chat_id } = req.query;
 
 	try {
-		// 유효한 user 인지 판단.
-		const user = await User.findOne({ UId: user_id });
-		if (!user)
-			return res.status(404).json({ message: 'User not found.' });
+		const user = await User.findOne({ UId: user_id }).populate('Chats');
+		if (!user) return res.status(404).json({ message: 'User not found.' });
 
-		const chats = await user.populate('Chats');
-		if (!chats)
-			return res.status(404).json({ message: 'Chat not found.' });
+		const chat = user.Chats.find(c => c.CId === chat_id);
+		if (!chat) return res.status(404).json({ message: 'Chat not found.' });
 
-		res.status(200).json(chats);
+		res.status(200).json(chat);
 	} catch (err) {
 		console.error(err);
 		res.status(500).json({ message: 'Internal backend server error.' });
@@ -151,30 +187,43 @@ app.get('/api/history/all', async (req, res) => {
 
 //히스토리 시간 받기
 app.get('/api/history/date', async (req, res) => {
-	const { user_id, chat_id } = req.body;
+	const { user_id, chat_id } = req.query;
 
 	try {
-		// 유효한 user 인지 판단.
-		const user = await User.findOne({ UId: user_id });
-		if (!user)
-			return res.status(404).json({ message: 'User not found.' });
+		const user = await User.findOne({ UId: user_id }).populate('Chats');
+		if (!user) return res.status(404).json({ message: 'User not found.' });
 
-		const chats = user.populate('Chats')
-		if (!chats)
-			return res.status(404).json({ message: 'Chat not found.' });
+		const chat = user.Chats.find(c => c.CId === chat_id);
+		if (!chat) return res.status(404).json({ message: 'Chat not found.' });
 
-		res.status(200).chats;
+		res.status(200).json({ date: chat.Cdate });
 	} catch (err) {
 		console.error(err);
 		res.status(500).json({ message: 'Internal backend server error.' });
 	}
 });
+
 //히스토리 삭제하기
-app.delete('/api/history/date/:name', (req, res) => {
+app.delete('/api/history/date/:name', async (req, res) => {
+	const { user_id, chat_id } = req.body;
 
+	try {
+		const user = await User.findOne({ UId: user_id });
+		if (!user) return res.status(404).json({ message: 'User not found.' });
 
+		const chatIndex = user.Chats.findIndex(c => c.toString() === chat_id);
+		if (chatIndex === -1) return res.status(404).json({ message: 'Chat not found.' });
+
+		user.Chats.splice(chatIndex, 1);
+		await user.save();
+
+		await Chat.deleteOne({ CId: chat_id });
+		res.status(200).json({ message: 'Chat deleted successfully.' });
+	} catch (err) {
+		console.error(err);
+		res.status(500).json({ message: 'Internal backend server error.' });
+	}
 });
-
 
 // 서버 실행
 app.listen(PORT, '0.0.0.0', () => {
