@@ -9,7 +9,16 @@ const { User, Chat, Question } = require('./models'); // 모델 불러오기
 //express 객체 생성.
 const app = express();
 app.use(express.json()); // JSON 파싱	
+
+//cors 설정
 app.use(cors());
+
+//로그 미들웨어
+app.use((req, res, next) => {
+	console.log(`[${new Date().toISOString()}] ${req.method} ${req.url}`);
+	console.log('Headers:', req.headers);
+	next();
+});
 
 // MongoDB 연결
 const dbURI = 'mongodb://localhost:27017/chatDB'; // 로컬 MongoDB URL (필요에 따라 수정)
