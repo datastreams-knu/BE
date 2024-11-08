@@ -2,6 +2,7 @@
 const express = require('express');
 const mongoose = require('mongoose');
 const cors = require('cors');
+const axios = require('axios');
 const PORT = 3001;
 
 const { User, Chat, Question } = require('./models'); // 모델 불러오기
@@ -13,7 +14,10 @@ app.use(express.json()); // JSON 파싱
 //cors 설정
 app.use(cors());
 
-//로그 미들웨어
+//ai 서버 url
+const ai_server_url = 'http://13.210.175.149:5000';
+
+//로그 확인용 미들웨어
 app.use((req, res, next) => {
 	console.log(`[${new Date().toISOString()}] ${req.method} ${req.url}`);
 	console.log('Headers:', req.headers);
@@ -54,6 +58,27 @@ app.get('/api/test', (req, res) => {
 /*************
 채팅 api
 *************/
+// 질문을 받아 AI 서버에 전달하고 응답을 반환하는 API 엔드포인트
+app.post('/api/front-ai-response', async (req, res) => {
+	try {
+		const { question } = req.body;
+
+		if (!question) {
+			return res.status(400).json({ error: 'No question provided' });
+		}
+
+		// AI 서버에 질문을 전달하고 응답을 받음
+		const aiServerUrl = ai_server_url + '/api/ai-response'; // AI 서버의 IP 주소로 변경 필요
+		const aiResponse = await axios.post(aiServerUrl, { question });
+
+		// 응답 반환
+		res.status(200).json({ response: aiResponse.data.response });
+	} catch (error) {
+		console.error('Error calling AI server:', error);
+		res.status(500).json({ error: error.message });
+	}
+});
+
 //질문 보내기
 app.post('/api/question', async (req, res) => {
 	try {
