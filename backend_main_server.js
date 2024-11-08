@@ -69,10 +69,11 @@ app.post('/api/front-ai-response', async (req, res) => {
 
 		// AI 서버에 질문을 전달하고 응답을 받음
 		const aiServerUrl = ai_server_url + '/api/ai-response'; // AI 서버의 IP 주소로 변경 필요
+		// 받은 응답은 json형식
 		const aiResponse = await axios.post(aiServerUrl, { question });
+		const { response } = aiResponse.data;
 
-		// 응답 반환
-		res.status(200).json({ response: aiResponse.data.response });
+		res.status(200).json({ response });
 	} catch (error) {
 		console.error('Error calling AI server:', error);
 		res.status(500).json({ error: error.message });
