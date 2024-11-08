@@ -6,17 +6,10 @@ const PORT = 3001;
 
 const { User, Chat, Question } = require('./models'); // 모델 불러오기
 
-//cors 설정 
-const corsOptions = {
-	origin: 'https://www.knu-chatbot.site',
-	methods: ['GET', 'POST', 'OPTIONS'],
-	allowedHeaders: ['Content-Type', 'Authorization'],
-};
-
 //express 객체 생성.
 const app = express();
 app.use(express.json()); // JSON 파싱	
-app.use(cors(corsOptions));
+app.use(cors());
 
 // MongoDB 연결
 const dbURI = 'mongodb://localhost:27017/chatDB'; // 로컬 MongoDB URL (필요에 따라 수정)
