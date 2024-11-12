@@ -14,8 +14,13 @@ app.use(express.json()); // JSON 파싱
 //cors 설정
 app.use(cors());
 
-//ai 서버 url
+//REST-api url
 const ai_server_url = 'http://13.210.175.149:5000';
+const kakao_server_url = 'https://kauth.kakao.com';
+const kakao_redirect_uri = 'https://www.knu-chatbot.site/callback';
+
+//카카오 로그인용 keys
+const kakao_rest_api_key = '4eb17d6035355206cad120867a29beac';
 
 //로그 확인용 미들웨어
 app.use((req, res, next) => {
@@ -25,7 +30,7 @@ app.use((req, res, next) => {
 });
 
 // MongoDB 연결
-const dbURI = 'mongodb://localhost:27017/chatDB'; // 로컬 MongoDB URL (필요에 따라 수정)
+const dbURI = 'mongodb://localhost:27017/chatDB';
 mongoose.connect(dbURI)
 	.then(() => console.log('success : DB connection'))
 	.catch((err) => console.log('fail : DB connection', err));
@@ -56,6 +61,20 @@ app.get('/api/test', (req, res) => {
 });
 
 /*************
+로그인 api
+*************/
+app.post('/api/login', async (req, res) => {
+	//1. get /oauth/authorize
+	//format : '/oauth/authorize?response_type=code&client_id=${REST_API_KEY}&redirect_uri=${REDIRECT_URI}'
+	//2. 인가코드 받기, 반드시 email사용 동의 항목 넣어야 함.	
+	const authorization_code = await axios.get(kakao_server_url + '/oauth/authorize?response_type=code&client_id=${kakao_rest_api_key}&redirect_uri=${kakao_redirect_uri}');
+	//3. post /oauth/token
+	//const kakao_token = await axios.post
+	//4. token으로 사용자 email가져옴.
+	//5. email이 db에 있다면, 로그인 없다면 회원가입시킴.
+});
+
+/*************
 채팅 api
 *************/
 // 질문을 받아 AI 서버에 전달하고 응답을 반환하는 API 엔드포인트
@@ -73,53 +92,51 @@ app.post('/api/front-ai-response', async (req, res) => {
 		const aiResponse = await axios.post(aiServerUrl, { question });
 		const { response } = aiResponse.data;
 
-		res.status(200).json({ response });
+		res.status(200).json(response);
 	} catch (error) {
 		console.error('Error calling AI server:', error);
 		res.status(500).json({ error: error.message });
 	}
 });
 
-//질문 보내기
-app.post('/api/question', async (req, res) => {
+//필요한 것: history id -> body에?
+// history id는 어디에 저장되어 있어야 하는가?
+/*
+request body 예시 (json)
+{
+	"userID"  : "userid",  -----> user id 대신 kakaotalk email로 인증받자. 액세스토큰 -> api에서 email가져오기
+	"historyID" : "historyid",
+	"question" : "question contents"
+}
+
+result body 예시 (json)
+{
+	"response" : "responses"
+}
+*/
+app.post('/api/front-ai-response-loggined', async (req, res) => {
 	try {
-		const { userId, questionText } = req.body;
-		const user = await User.findOne({ UId: userId });
-		if (!user) return res.status(404).json({ message: 'User not found.' });
+		const { question } = req.body;
 
-		const newQuestion = new Question({
-			QText: questionText,
-			QDate: new Date(),
-		});
-		await newQuestion.save();
+		if (!question) {
+			return res.status(400).json({ error: 'No question provided' });
+		}
 
-		user.Questions.push(newQuestion._id);
-		await user.save();
+		// AI 서버에 질문을 전달하고 응답을 받음
+		const aiServerUrl = ai_server_url + '/api/ai-response'; // AI 서버의 IP 주소로 변경 필요
+		// 받은 응답은 json형식
+		const aiResponse = await axios.post(aiServerUrl, { question });
+		const { response } = aiResponse.data;
 
-		res.status(201).json(newQuestion);
+		res.status(200).json({ response });
+		//사용자 토큰이나 id를 받아서 알맞은 history에 저장.
+
 	} catch (error) {
+		console.error('Error calling AI server:', error);
 		res.status(500).json({ error: error.message });
 	}
 });
 
-//답변 받기
-app.get('/api/chat/answer', async (req, res) => {
-	try {
-		const { questionId } = req.query;
-		const question = await Question.findById(questionId);
-		if (!question) return res.status(404).json({ message: 'Question not found.' });
-
-		// AI 서버 통신 로직 필요 (예: AI 서버 API 호출 및 응답 수신)
-		const aiResponse = "This is a placeholder for the AI response.";
-
-		question.answer = aiResponse;
-		await question.save();
-
-		res.status(200).json({ answer: aiResponse });
-	} catch (error) {
-		res.status(500).json({ error: error.message });
-	}
-});
 
 //질문 보낸 시간 받기
 app.get('/api/chat/date', async (req, res) => {
