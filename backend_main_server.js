@@ -15,7 +15,7 @@ app.use(express.json()); // JSON 파싱
 app.use(cors());
 
 //ai 서버 url
-const ai_server_url = 'http://13.210.175.149:5000';
+const ai_server_url = 'http://127.0.0.0:5000';
 
 //로그 확인용 미들웨어
 app.use((req, res, next) => {
@@ -60,67 +60,26 @@ app.get('/api/test', (req, res) => {
 *************/
 // 질문을 받아 AI 서버에 전달하고 응답을 반환하는 API 엔드포인트
 app.post('/api/front-ai-response', async (req, res) => {
-    try {
-        console.log('Request body:', req.body);  // 추가 로그
-        const { question } = req.body;
-
-        if (!question) {
-            return res.status(400).json({ error: 'No question provided' });
-        }
-
-        // AI 서버에 질문을 전달하고 응답을 받음
-        const api_end_point  = ai_server_url + '/api/ai-response';
-        const aiResponse = await axios.post(api_end_point, { question }, { timeout: 100000 });
-
-        // 응답 반환
-        res.status(200).json(aiResponse);
-    } catch (error) {
-    console.error('Error calling AI server:', error);
-    const errorMessage = error.response ? error.response.data : error.message;
-    res.status(500).json({ error: errorMessage });
-}
-
-});
-
-//질문 보내기
-app.post('/api/question', async (req, res) => {
 	try {
-		const { userId, questionText } = req.body;
-		const user = await User.findOne({ UId: userId });
-		if (!user) return res.status(404).json({ message: 'User not found.' });
+		console.log('Request body:', req.body);  // 추가 로그
+		const { question } = req.body;
 
-		const newQuestion = new Question({
-			QText: questionText,
-			QDate: new Date(),
-		});
-		await newQuestion.save();
+		if (!question) {
+			return res.status(400).json({ error: 'No question provided' });
+		}
 
-		user.Questions.push(newQuestion._id);
-		await user.save();
+		// AI 서버에 질문을 전달하고 응답을 받음
+		const api_end_point = ai_server_url + '/ai/ai-response';
+		const aiResponse = await axios.post(api_end_point, { question }, { timeout: 15000 });
 
-		res.status(201).json(newQuestion);
+		// 응답 반환
+		res.status(200).json(aiResponse);
 	} catch (error) {
-		res.status(500).json({ error: error.message });
+		console.error('Error calling AI server:', error);
+		const errorMessage = error.response ? error.response.data : error.message;
+		res.status(500).json({ error: errorMessage });
 	}
-});
 
-//답변 받기
-app.get('/api/chat/answer', async (req, res) => {
-	try {
-		const { questionId } = req.query;
-		const question = await Question.findById(questionId);
-		if (!question) return res.status(404).json({ message: 'Question not found.' });
-
-		// AI 서버 통신 로직 필요 (예: AI 서버 API 호출 및 응답 수신)
-		const aiResponse = "This is a placeholder for the AI response.";
-
-		question.answer = aiResponse;
-		await question.save();
-
-		res.status(200).json({ answer: aiResponse });
-	} catch (error) {
-		res.status(500).json({ error: error.message });
-	}
 });
 
 //질문 보낸 시간 받기
