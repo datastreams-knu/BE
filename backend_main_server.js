@@ -15,7 +15,7 @@ app.use(express.json()); // JSON 파싱
 app.use(cors());
 
 //ai 서버 url
-const ai_server_url = 'http://127.0.0.0:5000';
+const ai_server_url = 'http://127.0.0.1:5000';
 
 //로그 확인용 미들웨어
 app.use((req, res, next) => {
