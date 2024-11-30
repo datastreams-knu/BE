@@ -20,7 +20,7 @@ app.use(cors());
 const ai_server_url = 'http://127.0.0.1:5000';
 
 //jwt key
-const secret = crypto.randomBytes(32).toString('base64');
+const JWT_SECRET = 'dev_jwt_secret_key_G7v^#JdLwP!8qFzT@X9p$';
 
 //로그 확인용 미들웨어
 app.use((req, res, next) => {
