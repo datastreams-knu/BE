@@ -52,22 +52,29 @@ app.get('/api/test', (req, res) => {
 // 이메일 중복 확인
 app.get('/api/member/check-email', async (req, res) => {
 	try {
-		const { email } = req.query.email;
+		const { email } = req.query; // req.query에서 email 추출
+
+		if (!email) {
+			return res.status(400).json({ error: 'Email is required' });
+		}
 
 		const emailRegex = /^[\w-\.]+@([\w-]+\.)+[\w-]{2,4}$/;
-		if (!email || !emailRegex.test(email)) {
+		if (!emailRegex.test(email)) {
 			return res.status(400).json({ error: 'Invalid email format' });
 		}
 
-		const existingUser = await User.findOne({ email });
-		const email_check = !!existingUser; // 이메일이 존재하면 true 반환
+		// MongoDB에서 이메일 존재 여부 확인
+		const existingUser = await User.findOne({ email }).exec();
+		const isEmailTaken = !!existingUser; // 이메일이 존재하면 true 반환
 
-		return res.status(200).json({ email_check: email_check });
+		// 결과 반환
+		return res.status(200).json({ email_check: isEmailTaken });
 	} catch (error) {
-		console.error(error);
+		console.error('Error checking email:', error);
 		return res.status(500).json({ error: 'Internal Server Error' });
 	}
 });
+
 
 // 회원가입
 app.post('/api/member/signup', async (req, res) => {
