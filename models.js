@@ -16,12 +16,33 @@ const chatSchema = new Schema({
 	Questions: [{ type: Schema.Types.ObjectId, ref: 'Question' }]
 });
 
-// USER 스키마
-const userSchema = new Schema({
-	Token: { type: String, required: true },
+const userSchema = new mongoose.Schema({
+	email: {
+		type: String,
+		required: true,
+		unique: true, // 이메일은 중복되지 않아야 함
+		trim: true,   // 앞뒤 공백 제거
+		match: /^[\w-\.]+@([\w-]+\.)+[\w-]{2,4}$/ // 이메일 형식 검증
+	},
+	password: {
+		type: String,
+		required: true,
+		minlength: 8 // 최소 8자 제한
+	},
+	nickname: {
+		type: String,
+		required: true,
+		trim: true, // 앞뒤 공백 제거
+		minlength: 2, // 닉네임 최소 길이
+		maxlength: 20 // 닉네임 최대 길이
+	},
+	joinedAt: {
+		type: Date,
+		default: Date.now // 기본값으로 현재 시간
+	},
+
 	Chats: [{ type: Schema.Types.ObjectId, ref: 'Chat' }]
 });
-
 
 // 각 스키마에 대한 모델 생성
 const User = mongoose.model('User', userSchema);

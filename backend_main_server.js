@@ -3,6 +3,8 @@ const express = require('express');
 const mongoose = require('mongoose');
 const cors = require('cors');
 const axios = require('axios');
+const jwt = require('jsonwebtoken');
+const bcrypt = require('bcrypt');
 const PORT = 3001;
 
 const { User, Chat, Question } = require('./models'); // 모델 불러오기
@@ -17,6 +19,9 @@ app.use(cors());
 //ai 서버 url
 const ai_server_url = 'http://127.0.0.1:5000';
 
+//jwt key
+const secret = crypto.randomBytes(32).toString('base64');
+
 //로그 확인용 미들웨어
 app.use((req, res, next) => {
 	console.log(`[${new Date().toISOString()}] ${req.method} ${req.url}`);
@@ -30,35 +35,133 @@ mongoose.connect(dbURI)
 	.then(() => console.log('success : DB connection'))
 	.catch((err) => console.log('fail : DB connection', err));
 
-// 사용자 생성 임시 api
-app.post('/api/user/add', async (req, res) => {
-	try {
-		const newUser = new User({
-			"UId": "1111",
-			"Token": "22222",
-			"Chats": []
-		});
-		const savedUser = await newUser.save();
-		res.status(201).json(savedUser);
-	} catch (error) {
-		res.status(400).json({ error: error.message });
-	}
-});
-
 //frontend - backend test api
 app.get('/api/test', (req, res) => {
 	console.log('GET /api/test 요청 수신');
 	res.json({
 		success: true,
-		message: 'Backend communication successful!',
+		message: 'Front - Backend communication successful!',
 		timestamp: new Date().toISOString(),
 	});
 });
 
 /*************
+로그인, 회원가입 api
+*************/
+
+// 이메일 중복 확인
+app.get('/api/member/check-email', async (req, res) => {
+	try {
+		const { email } = req.query.email;
+
+		const emailRegex = /^[\w-\.]+@([\w-]+\.)+[\w-]{2,4}$/;
+		if (!email || !emailRegex.test(email)) {
+			return res.status(400).json({ error: 'Invalid email format' });
+		}
+
+		const existingUser = await User.findOne({ email });
+		const email_check = !!existingUser; // 이메일이 존재하면 true 반환
+
+		return res.status(200).json({ email_check: email_check });
+	} catch (error) {
+		console.error(error);
+		return res.status(500).json({ error: 'Internal Server Error' });
+	}
+});
+
+// 회원가입
+app.post('/api/member/signup', async (req, res) => {
+	try {
+		const { email, password, nickname } = req.body;
+
+		if (!email || !password || !nickname) {
+			return res.status(400).json({ error: 'Missing required fields' });
+		}
+
+		// 이메일 중복 확인 생략 (프론트엔드에서 이미 중복 확인 버튼을 통해 검증했음을 가정)
+		//const existingUser = await User.findOne({ email });
+		//if (existingUser) {
+		//	return res.status(409).json({ error: 'Email already exists' });
+		//}
+
+		// 비밀번호 해싱
+		const hashedPassword = await bcrypt.hash(password, 10);
+
+		// 새 사용자 생성
+		const newUser = new User({
+			email,
+			password: hashedPassword,
+			nickname,
+			joinedAt: new Date()
+		});
+
+		await newUser.save();
+		return res.status(201).send(); // 성공 상태 코드 반환
+	} catch (error) {
+		console.error(error);
+		return res.status(500).json({ error: 'Internal Server Error' });
+	}
+});
+
+// 로그인
+app.post('/api/member/login', async (req, res) => {
+	try {
+		const { email, password } = req.body;
+
+		if (!email || !password) {
+			return res.status(400).json({ error: 'Missing email or password' });
+		}
+
+		// 사용자 찾기
+		const user = await User.findOne({ email });
+		if (!user) {
+			return res.status(401).json({ error: 'Invalid email or password' });
+		}
+
+		// 비밀번호 확인
+		const isPasswordValid = await bcrypt.compare(password, user.password);
+		if (!isPasswordValid) {
+			return res.status(401).json({ error: 'Invalid email or password' });
+		}
+
+		// JWT 토큰 생성
+		const accessToken = jwt.sign({ userId: user._id }, JWT_SECRET, { expiresIn: '24h' });
+
+		return res.status(200).json({ accessToken });
+	} catch (error) {
+		console.error(error);
+		return res.status(500).json({ error: 'Internal Server Error' });
+	}
+});
+
+// 내 정보 보기
+app.get('/api/member/info', async (req, res) => {
+	try {
+		const { userId } = req.query;
+
+		if (!userId) {
+			return res.status(400).json({ error: 'User ID is required' });
+		}
+
+		const user = await User.findById(userId);
+		if (!user) {
+			return res.status(404).json({ error: 'User not found' });
+		}
+
+		return res.status(200).json({
+			nickname: user.nickname,
+			joinedAt: user.joinedAt.toISOString()
+		});
+	} catch (error) {
+		console.error(error);
+		return res.status(500).json({ error: 'Internal Server Error' });
+	}
+});
+
+/*************
 채팅 api
 *************/
-// 질문을 받아 AI 서버에 전달하고 응답을 반환하는 API 엔드포인트
+// 비회원 전용 질문 (히스토리 추가 x)
 app.post('/api/front-ai-response', async (req, res) => {
 	try {
 		console.log('Request body:', req.body);  // 추가 로그
@@ -70,7 +173,7 @@ app.post('/api/front-ai-response', async (req, res) => {
 
 		// AI 서버에 질문을 전달하고 응답을 받음
 		const api_end_point = ai_server_url + '/ai/ai-response';
-		const aiResponse = await axios.post(api_end_point, { question }, { timeout: 15000 });
+		const aiResponse = await axios.post(api_end_point, { question }, { timeout: 30000 });
 
 		// 응답 반환
 		res.status(200).json(aiResponse);
@@ -80,6 +183,37 @@ app.post('/api/front-ai-response', async (req, res) => {
 		res.status(500).json({ error: errorMessage });
 	}
 
+});
+
+//회원 전용 질문 (히스토리 추가)
+app.post('/api/chat/user-question', async (req, res) => {
+	try {
+		console.log('Request body:', req.body);  // 추가 로그
+		const { question, token } = req.body;
+		const decoded = jwt.verify(token, JWT_SECRET);
+
+		if (!decoded) {
+			return res.status(401).json({ error: 'Unauthorized' });
+		}
+
+		if (!question) {
+			return res.status(400).json({ error: 'No question provided' });
+		}
+
+		// AI 서버에 질문을 전달하고 응답을 받음
+		const api_end_point = ai_server_url + '/ai/ai-response';
+		const aiResponse = await axios.post(api_end_point, { question }, { timeout: 30000 });
+
+		// 히스토리에 저장 코드
+		// code here
+
+		// 응답 반환
+		res.status(200).json(aiResponse);
+	} catch (error) {
+		console.error('Error calling AI server:', error);
+		const errorMessage = error.response ? error.response.data : error.message;
+		res.status(500).json({ error: errorMessage });
+	}
 });
 
 //질문 보낸 시간 받기
@@ -112,12 +246,13 @@ app.post('/api/chat/reputate/:reputation', async (req, res) => {
 	}
 });
 
+
 /*************
 히스토리 api
 *************/
 //새 히스토리 만들기
 app.post('/api/history/make', async (req, res) => {
-	const { userId } = req.body;
+	const { email } = req.query;
 
 	try {
 		const user = await User.findOne({ UId: userId });
