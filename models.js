@@ -40,7 +40,6 @@ const userSchema = new mongoose.Schema({
 		type: Date,
 		default: Date.now // 기본값으로 현재 시간
 	},
-
 	Chats: [{ type: Schema.Types.ObjectId, ref: 'Chat' }]
 });
 

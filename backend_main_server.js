@@ -22,6 +22,28 @@ const ai_server_url = 'http://127.0.0.1:5000';
 //jwt key
 const JWT_SECRET = 'dev_jwt_secret_key_G7v^#JdLwP!8qFzT@X9p$';
 
+// JWT 인증 미들웨어
+const authenticateToken = (req, res, next) => {
+	// Authorization 헤더에서 토큰 추출
+	const authHeader = req.headers['authorization'];
+	const token = authHeader && authHeader.split(' ')[1]; // Bearer <token> 형식
+
+	if (!token) {
+		return res.status(401).json({ error: 'Access token is required' });
+	}
+
+	// 토큰 검증
+	jwt.verify(token, JWT_SECRET, (err, user) => {
+		if (err) {
+			return res.status(403).json({ error: 'Invalid or expired token' });
+		}
+
+		// 사용자 정보를 요청 객체에 추가
+		req.user = user; // user는 JWT의 payload 정보
+		next(); // 다음 미들웨어 또는 라우터로 이동
+	});
+};
+
 //로그 확인용 미들웨어
 app.use((req, res, next) => {
 	console.log(`[${new Date().toISOString()}] ${req.method} ${req.url}`);
@@ -48,7 +70,6 @@ app.get('/api/test', (req, res) => {
 /*************
 로그인, 회원가입 api
 *************/
-
 // 이메일 중복 확인
 app.get('/api/member/check-email', async (req, res) => {
 	try {
@@ -142,7 +163,8 @@ app.post('/api/member/login', async (req, res) => {
 });
 
 // 내 정보 보기
-app.get('/api/member/info', async (req, res) => {
+// 닉네임 가입일자 이메일 질문개수
+app.get('/api/member/info', authenticateToken, async (req, res) => {
 	try {
 		const { userId } = req.query;
 
@@ -181,7 +203,7 @@ app.post('/api/front-ai-response', async (req, res) => {
 		// AI 서버에 질문을 전달하고 응답을 받음
 		const api_end_point = ai_server_url + '/ai/ai-response';
 		const aiResponse = await axios.post(api_end_point, { question }, { timeout: 30000 });
-
+		console.log(aiResponse.data)
 		// 응답 반환
 		res.status(200).json(aiResponse.data);
 	} catch (error) {
@@ -258,9 +280,7 @@ app.post('/api/chat/reputate/:reputation', async (req, res) => {
 히스토리 api
 *************/
 //새 히스토리 만들기
-app.post('/api/history/make', async (req, res) => {
-	const { email } = req.query;
-
+app.post('/api/history/new-history', async (req, res) => {
 	try {
 		const user = await User.findOne({ UId: userId });
 		if (!user) return res.status(404).json({ message: 'User not found.' });
@@ -335,55 +355,75 @@ app.get('/api/history/show-all', async (req, res) => {
 });
 
 
-//히스토리 시간 받기
-app.get('/api/history/date', async (req, res) => {
-	const { user_id, chat_id } = req.query;
-
+//히스토리 이름 수정
+app.patch('/api/history/rename', async (req, res) => {
 	try {
-		const user = await User.findOne({ UId: user_id }).populate('Chats');
-		if (!user) return res.status(404).json({ message: 'User not found.' });
+		const { email, historyName } = req.body;
 
-		const chat = user.Chats.find(c => c.CId === chat_id);
-		if (!chat) return res.status(404).json({ message: 'Chat not found.' });
+		if (!email || !historyName) {
+			return res.status(400).json({ error: 'Email and history name are required' });
+		}
 
-		res.status(200).json({ date: chat.Cdate });
+		// 사용자 검색
+		const user = await User.findOne({ email }).populate({
+			path: 'Chats',
+			select: 'Cname'
+		});
+
+		// 사용자의 히스토리 중 이름이 일치하는 항목 검색
+		const chat_to_rename = user.Chats.find(chat => chat.Cname === historyName);
+		if (!chat_to_rename) {
+			return res.status(404).json({ error: historyName + 'is not found' });
+		}
+
+
+		res.status(200).json({ date: Chat.Cdate });
 	} catch (err) {
 		console.error(err);
 		res.status(500).json({ message: 'Internal backend server error.' });
 	}
 });
 
-//히스토리 삭제하기
 app.delete('/api/history/delete', async (req, res) => {
-	const { email, history_name } = req.params;
-
 	try {
-		const { email, history_name } = req.params;
+		const { email, historyName } = req.body;
 
-		if (!email) {
-			return res.status(400).json({ error: 'Email is required' });
+		if (!email || !historyName) {
+			return res.status(400).json({ error: 'Email and history name are required' });
 		}
 
-		if (!history_name) {
-			return res.status(401).json({ error: 'history name is required' });
+		// 사용자 검색
+		const user = await User.findOne({ email }).populate({
+			path: "Chats",
+			select: "Cname"
+		});
+		if (!user) {
+			return res.status(404).json({ error: 'User not found' });
 		}
 
-		const user = await User.findOne({ email }).populate('Chats');
+		// 사용자의 히스토리 중 이름이 일치하는 항목 검색
+		const chatToDelete = user.Chats.find(chat => chat.Cname === historyName);
+		if (!chatToDelete) {
+			return res.status(404).json({ error: 'History not found for this user' });
+		}
 
+		// 히스토리가 참조하는 Questions 삭제
+		await Question.deleteMany({ _id: { $in: chatToDelete.Questions } });
 
-		const chatIndex = user.Chats.findIndex(c => c.toString() === chat_id);
-		if (chatIndex === -1) return res.status(404).json({ message: 'Chat not found.' });
+		// 히스토리 삭제
+		await Chat.findByIdAndDelete(chatToDelete._id);
 
-		user.Chats.splice(chatIndex, 1);
+		// 사용자의 Chats 배열에서 해당 히스토리 참조 제거
+		user.Chats = user.Chats.filter(chat => chat._id.toString() !== chatToDelete._id.toString());
 		await user.save();
 
-		await Chat.deleteOne({ CId: chat_id });
-		res.status(200).json({ message: 'Chat deleted successfully.' });
-	} catch (err) {
-		console.error(err);
-		res.status(500).json({ message: 'Internal backend server error.' });
+		return res.status(200).json({ message: historyName + 'is deleted successfully' });
+	} catch (error) {
+		console.error('Error deleting history:', error);
+		return res.status(500).json({ error: 'Internal Server Error' });
 	}
 });
+
 
 // 서버 실행
 app.listen(PORT, '0.0.0.0', () => {
