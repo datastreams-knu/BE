@@ -183,7 +183,7 @@ app.post('/api/front-ai-response', async (req, res) => {
 		const aiResponse = await axios.post(api_end_point, { question }, { timeout: 30000 });
 
 		// 응답 반환
-		res.status(200).json(aiResponse);
+		res.status(200).json(aiResponse.data);
 	} catch (error) {
 		console.error('Error calling AI server:', error);
 		const errorMessage = error.response ? error.response.data : error.message;
@@ -305,23 +305,35 @@ app.patch('/api/history/name/:after', async (req, res) => {
 	}
 });
 
-//히스토리 내의 모든 채팅받기
-app.get('/api/history/all', async (req, res) => {
-	const { user_id, chat_id } = req.query;
-
+// 유저의 모든 히스토리의 기본정보 가져오기
+// 반환은 id, namee, date
+app.get('/api/history/show-all', async (req, res) => {
 	try {
-		const user = await User.findOne({ UId: user_id }).populate('Chats');
-		if (!user) return res.status(404).json({ message: 'User not found.' });
+		const { email } = req.params;
 
-		const chat = user.Chats.find(c => c.CId === chat_id);
-		if (!chat) return res.status(404).json({ message: 'Chat not found.' });
+		if (!email) {
+			return res.status(400).json({ error: 'Email is required' });
+		}
 
-		res.status(200).json(chat);
-	} catch (err) {
-		console.error(err);
-		res.status(500).json({ message: 'Internal backend server error.' });
+		const user = await User.findOne({ email }).populate('Chats');
+		if (!user) {
+			return res.status(401).json({ error: 'User not found' });
+		}
+
+		// Chats의 기본 정보만 반환
+		const histories = user.Chats.map(chat => ({
+			id: chat._id,
+			name: chat.Cname,
+			date: chat.Cdate
+		}));
+
+		return res.status(200).json(histories);
+	} catch (error) {
+		console.error('Error fetching user histories:', error);
+		return res.status(500).json({ error: 'Internal Server Error' });
 	}
 });
+
 
 //히스토리 시간 받기
 app.get('/api/history/date', async (req, res) => {
@@ -342,12 +354,22 @@ app.get('/api/history/date', async (req, res) => {
 });
 
 //히스토리 삭제하기
-app.delete('/api/history/date/:name', async (req, res) => {
-	const { user_id, chat_id } = req.body;
+app.delete('/api/history/delete', async (req, res) => {
+	const { email, history_name } = req.params;
 
 	try {
-		const user = await User.findOne({ UId: user_id });
-		if (!user) return res.status(404).json({ message: 'User not found.' });
+		const { email, history_name } = req.params;
+
+		if (!email) {
+			return res.status(400).json({ error: 'Email is required' });
+		}
+
+		if (!history_name) {
+			return res.status(401).json({ error: 'history name is required' });
+		}
+
+		const user = await User.findOne({ email }).populate('Chats');
+
 
 		const chatIndex = user.Chats.findIndex(c => c.toString() === chat_id);
 		if (chatIndex === -1) return res.status(404).json({ message: 'Chat not found.' });
