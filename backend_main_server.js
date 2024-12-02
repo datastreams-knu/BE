@@ -73,7 +73,7 @@ app.get('/api/test', (req, res) => {
 // 이메일 중복 확인
 app.get('/api/member/check-email', async (req, res) => {
 	try {
-		const { email } = req.query; // req.query에서 email 추출
+		const { email } = req.body; // req.query에서 email 추출
 
 		if (!email) {
 			return res.status(400).json({ error: 'Email is required' });
@@ -136,28 +136,39 @@ app.post('/api/member/login', async (req, res) => {
 	try {
 		const { email, password } = req.body;
 
+		// 필수 필드 확인
 		if (!email || !password) {
-			return res.status(400).json({ error: 'Missing email or password' });
+			return res.status(400).json({ error: 'Missing required fields' });
 		}
 
-		// 사용자 찾기
+		// 이메일로 사용자 검색
 		const user = await User.findOne({ email });
 		if (!user) {
 			return res.status(401).json({ error: 'Invalid email or password' });
 		}
 
-		// 비밀번호 확인
+		// 비밀번호 검증
 		const isPasswordValid = await bcrypt.compare(password, user.password);
 		if (!isPasswordValid) {
 			return res.status(401).json({ error: 'Invalid email or password' });
 		}
 
-		// JWT 토큰 생성
-		const accessToken = jwt.sign({ userId: user._id }, JWT_SECRET, { expiresIn: '24h' });
+		// JWT 토큰 생성 (payload에 userId와 email 포함)
+		const token = jwt.sign(
+			{
+				userId: user._id,
+				email: user.email
+			},
+			JWT_SECRET,
+			{ expiresIn: '24h' }
+		);
 
-		return res.status(200).json({ accessToken });
+		// 응답 반환 (토큰 포함)
+		return res.status(200).json({
+			token
+		});
 	} catch (error) {
-		console.error(error);
+		console.error('Error during login:', error);
 		return res.status(500).json({ error: 'Internal Server Error' });
 	}
 });
@@ -166,7 +177,7 @@ app.post('/api/member/login', async (req, res) => {
 // 닉네임 가입일자 이메일 질문개수
 app.get('/api/member/info', authenticateToken, async (req, res) => {
 	try {
-		const { userId } = req.query;
+		const { userId } = req.user;
 
 		if (!userId) {
 			return res.status(400).json({ error: 'User ID is required' });
@@ -193,7 +204,6 @@ app.get('/api/member/info', authenticateToken, async (req, res) => {
 // 비회원 전용 질문 (히스토리 추가 x)
 app.post('/api/front-ai-response', async (req, res) => {
 	try {
-		console.log('Request body:', req.body);  // 추가 로그
 		const { question } = req.body;
 
 		if (!question) {
@@ -215,18 +225,19 @@ app.post('/api/front-ai-response', async (req, res) => {
 });
 
 //회원 전용 질문 (히스토리 추가)
-app.post('/api/chat/user-question', async (req, res) => {
+app.post('/api/chat/user-question', authenticateToken, async (req, res) => {
 	try {
-		console.log('Request body:', req.body);  // 추가 로그
-		const { question, token } = req.body;
-		const decoded = jwt.verify(token, JWT_SECRET);
-
-		if (!decoded) {
-			return res.status(401).json({ error: 'Unauthorized' });
+		const { historyId } = req.params;
+		const { question } = req.body;
+		const { userId } = req.user;
+		if (!userId) {
+			return res.status(400).json({ error: 'there is no user ID' });
 		}
-
 		if (!question) {
-			return res.status(400).json({ error: 'No question provided' });
+			return res.status(400).json({ error: 'There is no question' });
+		}
+		if (!historyId) {
+			return res.status(400).json({ error: 'There is no history ID' });
 		}
 
 		// AI 서버에 질문을 전달하고 응답을 받음
@@ -234,10 +245,18 @@ app.post('/api/chat/user-question', async (req, res) => {
 		const aiResponse = await axios.post(api_end_point, { question }, { timeout: 30000 });
 
 		// 히스토리에 저장 코드
-		// code here
+		const new_question = new Question({
+			Question: question,
+			Answer: aiResponse.data
+		});
+		await new_question.save();
+
+		const history = Chat.findById(historyId);
+		history.push(new_question._id);
+		await history.save();
 
 		// 응답 반환
-		res.status(200).json(aiResponse);
+		res.status(200).json(aiResponse.data);
 	} catch (error) {
 		console.error('Error calling AI server:', error);
 		const errorMessage = error.response ? error.response.data : error.message;
@@ -245,80 +264,29 @@ app.post('/api/chat/user-question', async (req, res) => {
 	}
 });
 
-//질문 보낸 시간 받기
-app.get('/api/chat/date', async (req, res) => {
-	try {
-		const { questionId } = req.query;
-		const question = await Question.findById(questionId);
-		if (!question) return res.status(404).json({ message: 'Question not found.' });
-
-		res.status(200).json({ date: question.QDate });
-	} catch (error) {
-		res.status(500).json({ error: error.message });
-	}
-});
-
-//답변 평가하기
-app.post('/api/chat/reputate/:reputation', async (req, res) => {
-	try {
-		const { questionId } = req.body;
-		const { reputation } = req.params;
-		const question = await Question.findById(questionId);
-		if (!question) return res.status(404).json({ message: 'Question not found.' });
-
-		question.reputation = reputation;
-		await question.save();
-
-		res.status(200).json({ message: 'Reputation updated successfully.' });
-	} catch (error) {
-		res.status(500).json({ error: error.message });
-	}
-});
-
-
 /*************
 히스토리 api
 *************/
 //새 히스토리 만들기
-app.post('/api/history/new-history', async (req, res) => {
+app.post('/api/history/new-history', authenticateToken, async (req, res) => {
 	try {
-		const user = await User.findOne({ UId: userId });
-		if (!user) return res.status(404).json({ message: 'User not found.' });
+		const { userId } = req.user;
+		if (!userId) {
+			return res.status(400).json({ error: 'User ID is required' });
+		}
 
 		const newChat = new Chat({
-			CId: mongoose.Types.ObjectId(),
 			Cname: 'initial name',
 			Cdate: Date.now(),
 			Questions: []
 		});
-
 		await newChat.save();
+
+		const user = User.findById(userId);
 		user.Chats.push(newChat._id);
 		await user.save();
 
-		res.status(201).json(newChat);
-	} catch (err) {
-		console.error(err);
-		res.status(500).json({ message: 'Internal backend server error.' });
-	}
-});
-
-//히스토리 이름 수정하기
-app.patch('/api/history/name/:after', async (req, res) => {
-	const { user_id, chat_id } = req.body;
-	const { after } = req.params;
-
-	try {
-		const user = await User.findOne({ UId: user_id });
-		if (!user) return res.status(404).json({ message: 'User not found.' });
-
-		const chat = await Chat.findOne({ CId: chat_id });
-		if (!chat) return res.status(404).json({ message: 'Chat not found.' });
-
-		chat.Cname = after;
-		await chat.save();
-
-		res.json({ message: 'Name changed successfully.' });
+		res.status(200).json({ "new_history_id": newChat._id });
 	} catch (err) {
 		console.error(err);
 		res.status(500).json({ message: 'Internal backend server error.' });
@@ -326,16 +294,19 @@ app.patch('/api/history/name/:after', async (req, res) => {
 });
 
 // 유저의 모든 히스토리의 기본정보 가져오기
-// 반환은 id, namee, date
-app.get('/api/history/show-all', async (req, res) => {
+// 반환은 id, name, date
+app.get('/api/history/show-all', authenticateToken, async (req, res) => {
 	try {
-		const { email } = req.params;
+		// authenticateToken에서 토큰 검증 후 사용자 정보 추출
+		const { userId } = req.user;
 
-		if (!email) {
-			return res.status(400).json({ error: 'Email is required' });
+
+		if (!userId) {
+			return res.status(400).json({ error: 'User ID is required' });
 		}
 
-		const user = await User.findOne({ email }).populate('Chats');
+		// 사용자 ID로 검색
+		const user = await User.findById(userId).populate('Chats');
 		if (!user) {
 			return res.status(401).json({ error: 'User not found' });
 		}
@@ -354,46 +325,62 @@ app.get('/api/history/show-all', async (req, res) => {
 	}
 });
 
+//히스토리 내부 모든 채팅 불러오기
+app.get('/api/history/show-questions/:historyId', authenticateToken, async (req, res) => {
+	try {
+		const { historyId } = req.params; // URL 파라미터에서 historyId 추출
+		if (!historyId) {
+			return res.status(400).json({ error: 'There is no history ID' });
+		}
+
+		const chat = await Chat.findById(historyId).populate({
+			path: 'Questions',
+			options: { sort: { QDate: 1 } }
+		});
+		if (!chat) {
+			return res.status(404).json({ error: 'Chat not found' });
+		}
+
+		return res.status(200).json(chat.Questions);
+	} catch (error) {
+		console.error('Error fetching questions from history:', error);
+		return res.status(500).json({ error: 'Internal Server Error' });
+	}
+});
 
 //히스토리 이름 수정
-app.patch('/api/history/rename', async (req, res) => {
+app.patch('/api/history/rename/:historyId/:historyName', authenticateToken, async (req, res) => {
 	try {
-		const { email, historyName } = req.body;
-
-		if (!email || !historyName) {
-			return res.status(400).json({ error: 'Email and history name are required' });
+		const { userId } = req.user;
+		const { historyId, historyName } = req.params;
+		if (!userId || !historyId) {
+			return res.status(400).json({ error: 'User ID or historyId is required' });
 		}
 
-		// 사용자 검색
-		const user = await User.findOne({ email }).populate({
-			path: 'Chats',
-			select: 'Cname'
-		});
+		const result = await Chat.updateOne(
+			{ _id: historyId },
+			{ $set: { "Cname": historyName } }
+		);
 
-		// 사용자의 히스토리 중 이름이 일치하는 항목 검색
-		const chat_to_rename = user.Chats.find(chat => chat.Cname === historyName);
-		if (!chat_to_rename) {
-			return res.status(404).json({ error: historyName + 'is not found' });
-		}
-
-
-		res.status(200).json({ date: Chat.Cdate });
+		res.status(200);
 	} catch (err) {
 		console.error(err);
 		res.status(500).json({ message: 'Internal backend server error.' });
 	}
 });
 
-app.delete('/api/history/delete', async (req, res) => {
+//히스토리 삭제
+app.delete('/api/history/delete/:historyId', authenticateToken, async (req, res) => {
 	try {
-		const { email, historyName } = req.body;
-
-		if (!email || !historyName) {
-			return res.status(400).json({ error: 'Email and history name are required' });
+		const historyName = req.params;
+		const { historyId } = req.params; // URL 파라미터에서 historyId 추출
+		if (!historyId) {
+			return res.status(400).json({ error: 'There is no history ID' });
 		}
 
 		// 사용자 검색
-		const user = await User.findOne({ email }).populate({
+		const { userId } = req.user;
+		const user = await User.findById(userId).populate({
 			path: "Chats",
 			select: "Cname"
 		});
@@ -417,7 +404,7 @@ app.delete('/api/history/delete', async (req, res) => {
 		user.Chats = user.Chats.filter(chat => chat._id.toString() !== chatToDelete._id.toString());
 		await user.save();
 
-		return res.status(200).json({ message: historyName + 'is deleted successfully' });
+		return res.status(200);
 	} catch (error) {
 		console.error('Error deleting history:', error);
 		return res.status(500).json({ error: 'Internal Server Error' });
