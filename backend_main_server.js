@@ -71,9 +71,9 @@ app.get('/api/test', (req, res) => {
 로그인, 회원가입 api
 *************/
 // 이메일 중복 확인
-app.get('/api/member/check-email', async (req, res) => {
+app.get('/api/member/check-email/:email', async (req, res) => {
 	try {
-		const { email } = req.body; // req.query에서 email 추출
+		const { email } = req.params; // req.query에서 email 추출
 
 		if (!email) {
 			return res.status(400).json({ error: 'Email is required' });
