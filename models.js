@@ -5,6 +5,7 @@ const { Schema } = mongoose;
 // QUESTION 스키마
 const questionSchema = new Schema({
 	text: { type: String },
+	Question: { type: String },
 	Answer: {
 		answer: { type: String, required: true },
 		disclaimer: { type: String },
