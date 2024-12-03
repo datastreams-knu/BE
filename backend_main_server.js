@@ -198,6 +198,41 @@ app.get('/api/member/info', authenticateToken, async (req, res) => {
 	}
 });
 
+app.delete('api/member/delete', authenticateToken, async (req, res) => {
+	try {
+		// 사용자 검색
+		const { userId } = req.user;
+		const user = await User.findById(userId).populate({
+			path: "Chats",
+			select: "Cname"
+		});
+		if (!user) {
+			return res.status(404).json({ error: 'User not found' });
+		}
+
+		// 사용자의 히스토리 중 이름이 일치하는 항목 검색
+		const chatToDelete = user.Chats.find(chat => chat.Cname === historyName);
+		if (!chatToDelete) {
+			return res.status(404).json({ error: 'History not found for this user' });
+		}
+
+		// 히스토리가 참조하는 Questions 삭제
+		await Question.deleteMany({ _id: { $in: chatToDelete.Questions } });
+		await Chat.findByIdAndDelete()
+		// 히스토리 삭제
+		await Chat.findByIdAndDelete(chatToDelete._id);
+
+		// 사용자의 Chats 배열에서 해당 히스토리 참조 제거
+		user.Chats = user.Chats.filter(chat => chat._id.toString() !== chatToDelete._id.toString());
+		await user.save();
+
+		return res.status(200);
+	} catch (error) {
+		console.error(error);
+		return res.status(500).json({ error: 'Internal Server Error' });
+	}
+});
+
 /*************
 채팅 api
 *************/
@@ -267,7 +302,6 @@ app.post('/api/chat/user-question', authenticateToken, async (req, res) => {
 /*************
 히스토리 api
 *************/
-//새 히스토리 만들기
 app.post('/api/history/new-history', authenticateToken, async (req, res) => {
 	try {
 		const { userId } = req.user;
@@ -275,6 +309,13 @@ app.post('/api/history/new-history', authenticateToken, async (req, res) => {
 			return res.status(400).json({ error: 'User ID is required' });
 		}
 
+		// 사용자 검색
+		const user = await User.findById(userId);
+		if (!user) {
+			return res.status(404).json({ error: 'User not found' });
+		}
+
+		// 새 히스토리 생성 및 저장
 		const newChat = new Chat({
 			Cname: 'initial name',
 			Cdate: Date.now(),
@@ -282,16 +323,18 @@ app.post('/api/history/new-history', authenticateToken, async (req, res) => {
 		});
 		await newChat.save();
 
-		const user = User.findById(userId);
+		// 사용자 Chats 업데이트 및 저장
 		user.Chats.push(newChat._id);
 		await user.save();
 
-		res.status(200).json({ "new_history_id": newChat._id });
+		// 성공 응답
+		res.status(201).json({ new_history_id: newChat._id });
 	} catch (err) {
-		console.error(err);
+		console.error('Error creating new history:', err);
 		res.status(500).json({ message: 'Internal backend server error.' });
 	}
 });
+
 
 // 유저의 모든 히스토리의 기본정보 가져오기
 // 반환은 id, name, date
