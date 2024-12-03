@@ -4,9 +4,14 @@ const { Schema } = mongoose;
 
 // QUESTION 스키마
 const questionSchema = new Schema({
-	Question: { type: String, required: true },
-	Answer: { type: String, required: true },
-	Qdate: { type: Date, default: Date.now }
+	text: { type: String },
+	Answer: {
+		answer: { type: String, required: true },
+		disclaimer: { type: String },
+		images: [String],
+		references: { type: String }
+	},
+	QDate: { type: Date, default: Date.now }
 });
 
 // CHAT 스키마
