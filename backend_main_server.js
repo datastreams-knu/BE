@@ -260,7 +260,7 @@ app.post('/api/front-ai-response', async (req, res) => {
 });
 
 //회원 전용 질문 (히스토리 추가)
-app.post('/api/chat/user-question', authenticateToken, async (req, res) => {
+app.post('/api/chat/user-question/:historyId', authenticateToken, async (req, res) => {
 	try {
 		const { historyId } = req.params;
 		const { question } = req.body;
