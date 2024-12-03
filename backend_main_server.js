@@ -71,9 +71,9 @@ app.get('/api/test', (req, res) => {
 로그인, 회원가입 api
 *************/
 // 이메일 중복 확인
-app.get('/api/member/check-email/:email', async (req, res) => {
+app.get('/api/member/check-email', async (req, res) => {
 	try {
-		const { email } = req.params.email;
+		const { email } = req.query; // 쿼리 파라미터에서 email 추출
 
 		if (!email) {
 			return res.status(400).json({ error: 'Email is required' });
@@ -81,7 +81,7 @@ app.get('/api/member/check-email/:email', async (req, res) => {
 
 		const emailRegex = /^[\w-\.]+@([\w-]+\.)+[\w-]{2,4}$/;
 		if (!emailRegex.test(email)) {
-			return res.status(401).json({ error: 'Invalid email format' });
+			return res.status(400).json({ error: 'Invalid email format' });
 		}
 
 		// MongoDB에서 이메일 존재 여부 확인
@@ -95,6 +95,7 @@ app.get('/api/member/check-email/:email', async (req, res) => {
 		return res.status(500).json({ error: 'Internal Server Error' });
 	}
 });
+
 
 
 // 회원가입
