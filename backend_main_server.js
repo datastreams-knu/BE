@@ -287,11 +287,15 @@ app.post('/api/chat/user-question/:historyId', authenticateToken, async (req, re
 		});
 		await new_question.save();
 
-		const history = Chat.findById(historyId);
+		const history = await Chat.findById(historyId);
+		if (!history) {
+			return res.status(404).json({ error: 'History not found' });
+		}
+
 		history.Questions.push(new_question._id);
 		await history.save();
 
-		// 응답 반환
+		// 응답 반환	
 		res.status(200).json(aiResponse.data);
 	} catch (error) {
 		console.error('Error calling AI server:', error);
