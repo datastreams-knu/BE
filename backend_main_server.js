@@ -73,7 +73,7 @@ app.get('/api/test', (req, res) => {
 // 이메일 중복 확인
 app.get('/api/member/check-email/:email', async (req, res) => {
 	try {
-		const { email } = req.query;
+		const { email } = req.params.email;
 
 		if (!email) {
 			return res.status(400).json({ error: 'Email is required' });
