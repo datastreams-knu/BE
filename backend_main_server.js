@@ -287,7 +287,7 @@ app.post('/api/chat/user-question/:historyId', authenticateToken, async (req, re
 		await history.save();
 
 		const user = await User.findById(userId);
-		await User.findByIdAndUpdate(userId, { $inc: { num_of_questions: 1 } });
+		await User.findByIdAndUpdate(userId, { $inc: { num_of_question: 1 } });
 		await user.save();
 
 		// 응답 반환	
