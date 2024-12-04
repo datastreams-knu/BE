@@ -386,7 +386,7 @@ app.get('/api/history/show-questions/:historyId', authenticateToken, async (req,
 });
 
 //히스토리 이름 수정
-app.patch('/api/history/rename/:historyId/:historyName', authenticateToken, async (req, res) => {
+app.post('/api/history/rename/:historyId/:historyName', authenticateToken, async (req, res) => {
 	try {
 		const { userId } = req.user;
 		const { historyId, historyName } = req.params;
@@ -417,7 +417,6 @@ app.patch('/api/history/rename/:historyId/:historyName', authenticateToken, asyn
 //히스토리 삭제
 app.delete('/api/history/delete/:historyId', authenticateToken, async (req, res) => {
 	try {
-		const historyName = req.params;
 		const { historyId } = req.params; // URL 파라미터에서 historyId 추출
 		if (!historyId) {
 			return res.status(400).json({ error: 'There is no history ID' });
@@ -427,14 +426,14 @@ app.delete('/api/history/delete/:historyId', authenticateToken, async (req, res)
 		const { userId } = req.user;
 		const user = await User.findById(userId).populate({
 			path: "Chats",
-			select: "Cname"
+			select: "_id"
 		});
 		if (!user) {
 			return res.status(404).json({ error: 'User not found' });
 		}
 
 		// 사용자의 히스토리 중 이름이 일치하는 항목 검색
-		const chatToDelete = user.Chats.find(chat => chat.Cname === historyName);
+		const chatToDelete = user.Chats.findById(historyId);
 		if (!chatToDelete) {
 			return res.status(404).json({ error: 'History not found for this user' });
 		}
