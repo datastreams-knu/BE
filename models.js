@@ -48,7 +48,7 @@ const userSchema = new mongoose.Schema({
 	},
 	Chats: [{ type: Schema.Types.ObjectId, ref: 'Chat' }],
 	num_of_question: {
-		type: Int,
+		type: Number,
 		default: 0
 	}
 });
