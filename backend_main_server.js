@@ -190,7 +190,8 @@ app.get('/api/member/info', authenticateToken, async (req, res) => {
 
 		return res.status(200).json({
 			nickname: user.nickname,
-			joinedAt: user.joinedAt.toISOString()
+			joinedAt: user.joinedAt.toISOString(),
+			num_of_questions: user.num_of_questions
 		});
 	} catch (error) {
 		console.error(error);
@@ -283,6 +284,10 @@ app.post('/api/chat/user-question/:historyId', authenticateToken, async (req, re
 
 		history.Questions.push(new_question._id);
 		await history.save();
+
+		const user = User.findById(userId);
+		user.num_of_questions += 1;
+		await user.save();
 
 		// 응답 반환	
 		res.status(200).json(aiResponse.data);

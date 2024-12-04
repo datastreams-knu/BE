@@ -46,7 +46,8 @@ const userSchema = new mongoose.Schema({
 		type: Date,
 		default: Date.now // 기본값으로 현재 시간
 	},
-	Chats: [{ type: Schema.Types.ObjectId, ref: 'Chat' }]
+	Chats: [{ type: Schema.Types.ObjectId, ref: 'Chat' }],
+	num_of_question: { type: int, default: 0 }
 });
 
 // 각 스키마에 대한 모델 생성
