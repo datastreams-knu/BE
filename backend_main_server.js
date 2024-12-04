@@ -426,14 +426,14 @@ app.delete('/api/history/delete/:historyId', authenticateToken, async (req, res)
 		const { userId } = req.user;
 		const user = await User.findById(userId).populate({
 			path: "Chats",
-			select: "_id"
+			populate: { path: "Questions", select: "_id" }
 		});
 		if (!user) {
 			return res.status(404).json({ error: 'User not found' });
 		}
 
 		// 사용자의 히스토리 중 이름이 일치하는 항목 검색
-		const chatToDelete = user.Chats.findById(historyId);
+		const chatToDelete = user.Chats.find(chat => chat._id.toString() === historyId);
 		if (!chatToDelete) {
 			return res.status(404).json({ error: 'History not found for this user' });
 		}
@@ -448,7 +448,7 @@ app.delete('/api/history/delete/:historyId', authenticateToken, async (req, res)
 		user.Chats = user.Chats.filter(chat => chat._id.toString() !== chatToDelete._id.toString());
 		await user.save();
 
-		return res.status(200);
+		res.status(200).json({ message: 'History deleted successfully.' });
 	} catch (error) {
 		console.error('Error deleting history:', error);
 		return res.status(500).json({ error: 'Internal Server Error' });
