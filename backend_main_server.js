@@ -282,11 +282,12 @@ app.post('/api/chat/user-question/:historyId', authenticateToken, async (req, re
 			return res.status(404).json({ error: 'History not found' });
 		}
 
-		history.Questions.push(new_question._id);
+		await Chat.findByIdAndUpdate(historyId, { $push: { Questions: new_question._id } });
+
 		await history.save();
 
-		const user = User.findById(userId);
-		user.num_of_questions += 1;
+		const user = await User.findById(userId);
+		await User.findByIdAndUpdate(userId, { $inc: { num_of_questions: 1 } });
 		await user.save();
 
 		// 응답 반환	
