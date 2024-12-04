@@ -97,7 +97,6 @@ app.get('/api/member/check-email', async (req, res) => {
 });
 
 
-
 // 회원가입
 app.post('/api/member/signup', async (req, res) => {
 	try {
@@ -199,37 +198,27 @@ app.get('/api/member/info', authenticateToken, async (req, res) => {
 	}
 });
 
-app.delete('api/member/delete', authenticateToken, async (req, res) => {
+// 회원탈퇴 API
+app.delete('/api/member/delete', authenticateToken, async (req, res) => {
 	try {
-		// 사용자 검색
 		const { userId } = req.user;
-		const user = await User.findById(userId).populate({
-			path: "Chats",
-			select: "Cname"
-		});
+
+		const user = await User.findById(userId).populate('Chats');
 		if (!user) {
 			return res.status(404).json({ error: 'User not found' });
 		}
 
-		// 사용자의 히스토리 중 이름이 일치하는 항목 검색
-		const chatToDelete = user.Chats.find(chat => chat.Cname === historyName);
-		if (!chatToDelete) {
-			return res.status(404).json({ error: 'History not found for this user' });
-		}
+		const chatIds = user.Chats.map(chat => chat._id);
+		const questionIds = user.Chats.flatMap(chat => chat.Questions);
+		await Question.deleteMany({ _id: { $in: questionIds } });
 
-		// 히스토리가 참조하는 Questions 삭제
-		await Question.deleteMany({ _id: { $in: chatToDelete.Questions } });
-		await Chat.findByIdAndDelete()
-		// 히스토리 삭제
-		await Chat.findByIdAndDelete(chatToDelete._id);
+		await Chat.deleteMany({ _id: { $in: chatIds } });
 
-		// 사용자의 Chats 배열에서 해당 히스토리 참조 제거
-		user.Chats = user.Chats.filter(chat => chat._id.toString() !== chatToDelete._id.toString());
-		await user.save();
+		await user.deleteOne();
 
-		return res.status(200);
+		return res.status(200).json({ message: 'User, chats, and related questions deleted successfully.' });
 	} catch (error) {
-		console.error(error);
+		console.error('Error deleting user:', error);
 		return res.status(500).json({ error: 'Internal Server Error' });
 	}
 });
@@ -322,7 +311,7 @@ app.post('/api/history/new-history', authenticateToken, async (req, res) => {
 
 		// 새 히스토리 생성 및 저장
 		const newChat = new Chat({
-			Cname: 'initial name',
+			Cname: new Date(Date.now()).toISOString().split('T')[0],
 			Cdate: Date.now(),
 			Questions: []
 		});
@@ -401,16 +390,24 @@ app.patch('/api/history/rename/:historyId/:historyName', authenticateToken, asyn
 	try {
 		const { userId } = req.user;
 		const { historyId, historyName } = req.params;
-		if (!userId || !historyId) {
-			return res.status(400).json({ error: 'User ID or historyId is required' });
+		if (!userId || !historyId || !historyName) {
+			return res.status(400).json({ error: 'there is no userId or historyId or historyName' });
 		}
 
 		const result = await Chat.updateOne(
 			{ _id: historyId },
-			{ $set: { "Cname": historyName } }
+			{ $set: { Cname: historyName } }
 		);
 
-		res.status(200);
+		if (result.matchedCount === 0) {
+			return res.status(404).json({ error: 'History not found' });
+		}
+
+		if (result.modifiedCount === 0) {
+			return res.status(400).json({ error: 'History name is already the same' });
+		}
+
+		res.status(200).json({ message: 'History name updated successfully.' });
 	} catch (err) {
 		console.error(err);
 		res.status(500).json({ message: 'Internal backend server error.' });
