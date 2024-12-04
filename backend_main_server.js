@@ -191,7 +191,7 @@ app.get('/api/member/info', authenticateToken, async (req, res) => {
 		return res.status(200).json({
 			nickname: user.nickname,
 			joinedAt: user.joinedAt.toISOString(),
-			num_of_questions: user.num_of_questions
+			num_of_question: user.num_of_question
 		});
 	} catch (error) {
 		console.error(error);
